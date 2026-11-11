@@ -1,0 +1,42 @@
+/*
+ * Text colouring for the typing test, done with the CSS Custom Highlight API.
+ *
+ * Why highlights instead of wrapping each letter in a <span> (which is what
+ * monkeytype itself does): highlights paint over existing text ranges without
+ * touching the DOM, so the page's layout, kerning, ligatures, event handlers
+ * and framework state (React etc.) are all left exactly as they were. The
+ * ::highlight() pseudo only allows a few paint-only properties (color,
+ * background, text-decoration), which is fine because that's all we need.
+ *
+ * These rules live in a manifest-injected stylesheet rather than a <style>
+ * tag the script adds, because extension stylesheets are exempt from the
+ * page's Content Security Policy while inline <style> tags may be blocked.
+ * They are inert until content.js registers highlights with these names.
+ *
+ * Colours come from monkeytype's default "serika dark" theme: the error red
+ * is #ca4754. The untyped grey is a mid tone that still reads as "dimmed" on
+ * both light pages (black text) and dark pages (white text), since we can't
+ * know the site's palette ahead of time.
+ */
+
+/* Text ahead of the caret: dimmed, like monkeytype's untyped words. */
+::highlight(monkeyread-untyped) {
+  color: #8f9196;
+}
+
+/* A wrong letter. */
+::highlight(monkeyread-error) {
+  color: #ca4754;
+}
+
+/* A wrong space has no glyph to recolour, so tint its background instead. */
+::highlight(monkeyread-error-space) {
+  background-color: rgba(202, 71, 84, 0.35);
+}
+
+/* Letters skipped by pressing space early: left grey and underlined in red,
+   which is how monkeytype marks a word you jumped past. */
+::highlight(monkeyread-missed) {
+  color: #8f9196;
+  text-decoration: underline 2px #ca4754;
+}
