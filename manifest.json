@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "monkeyread",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "press m on any page to type over its main text, monkeytype style, with live wpm and accuracy.",
   "permissions": ["storage"],
   "content_scripts": [

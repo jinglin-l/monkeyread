@@ -70,6 +70,8 @@
   const LIVE_WPM_GRACE_MS = 1000;
   const HISTORY_KEY = 'monkeyread.results';
   const HISTORY_CAP = 200;
+  // Remembered across pages so a collapsed HUD stays collapsed.
+  const HUD_COLLAPSED_KEY = 'monkeyread.hudCollapsed';
 
   const HL_NAMES = {
     untyped: 'monkeyread-untyped',
@@ -294,6 +296,7 @@
     idleTimer: 0,
     hudTimer: 0,
     history: [],
+    hudCollapsed: false,
     lastResult: null,
     ended: false,       // reached the end of the text
     root: null,
@@ -328,11 +331,23 @@
     shadow.appendChild(caret);
 
     hud = document.createElement('div');
-    hud.style.cssText = 'position:fixed;top:16px;right:16px;min-width:180px;' +
-      'padding:10px 14px;border-radius:8px;background:rgba(50,52,55,0.94);' +
+    // The HUD is the one clickable part of the overlay (the host itself is
+    // pointer-events:none so the caret never eats clicks). Clicking toggles
+    // between the full panel and a small pill, because the full panel can
+    // cover a site's own top-right controls (search, account menus...).
+    hud.style.cssText = 'position:fixed;top:16px;right:16px;' +
+      'border-radius:8px;background:rgba(50,52,55,0.94);' +
       'color:#d1d0c5;box-shadow:0 4px 18px rgba(0,0,0,0.25);' +
       "font:13px/1.4 'Roboto Mono','JetBrains Mono',ui-monospace,Menlo,monospace;" +
-      'text-align:left;letter-spacing:0;';
+      'text-align:left;letter-spacing:0;pointer-events:auto;cursor:pointer;user-select:none;';
+    hud.addEventListener('click', (e) => {
+      // Keep the click from reaching the page, and from our own
+      // click-to-place-caret handler.
+      e.stopPropagation();
+      S.hudCollapsed = !S.hudCollapsed;
+      store.set(HUD_COLLAPSED_KEY, S.hudCollapsed).catch(() => {});
+      updateHud();
+    });
     shadow.appendChild(hud);
 
     document.documentElement.appendChild(host);
@@ -510,6 +525,25 @@
   // since nothing here should ever be parsed as markup.
   function renderHud(main, sub, highlightSub = false) {
     hud.replaceChildren();
+    if (S.hudCollapsed) {
+      // Collapsed pill: only the headline number (WPM, or "ready"), so you
+      // still see your speed without the panel covering the page.
+      const [value, unit, color] = main[0];
+      hud.style.padding = '3px 9px';
+      hud.style.minWidth = '0';
+      hud.title = 'monkeyread: click to expand';
+      const v = document.createElement('span');
+      v.textContent = value;
+      v.style.cssText = `font-size:14px;color:${color || CARET_COLOR};`;
+      const u = document.createElement('span');
+      u.textContent = unit ? ` ${unit}` : '';
+      u.style.cssText = 'color:#646669;font-size:11px;';
+      hud.append(v, u);
+      return;
+    }
+    hud.style.padding = '10px 14px';
+    hud.style.minWidth = '180px';
+    hud.title = 'click to collapse';
     const line1 = document.createElement('div');
     line1.style.cssText = 'display:flex;gap:14px;align-items:baseline;white-space:nowrap;';
     for (const [value, unit, color] of main) {
@@ -780,6 +814,7 @@
     S.resizeObs.observe(S.root);
 
     try { S.history = (await store.get(HISTORY_KEY)) || []; } catch (_) { S.history = []; }
+    try { S.hudCollapsed = !!(await store.get(HUD_COLLAPSED_KEY)); } catch (_) { /* default: expanded */ }
     if (S.active && !S.started) updateHud();
   }
 
@@ -851,6 +886,9 @@
   // Links and controls keep working normally.
   function onClick(e) {
     if (!S.active || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    // Clicks on the HUD (seen here retargeted to our host element) belong
+    // to the HUD's collapse toggle, not to caret placement.
+    if (e.target === host) return;
     if (e.target instanceof Element && e.target.closest('a,button,input,textarea,select,label,[contenteditable]')) return;
     const pos = document.caretPositionFromPoint?.(e.clientX, e.clientY);
     const list = pos && S.nodeIndex.get(pos.offsetNode);
